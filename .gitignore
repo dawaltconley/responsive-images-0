@@ -1,5 +1,6 @@
 node_modules/
 dist/
+device-data/
 eleventy/_site/
 eleventy/_data/generated/
 .DS_Store
