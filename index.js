@@ -15,7 +15,7 @@ module.exports.data = data;
 module.exports.plugin = {
     initArguments: {},
     configFunction: function (eleventyConfig) {
-        eleventyConfig.addNunjucksShortcode('srcset', (src, kwargs={}) => {
+        eleventyConfig.addNunjucksShortcode('srcset', (src, kwargs) => {
             if (kwargs && kwargs.__keywords !== true)
                 throw new Error('Srcset tag only takes an image and kwargs; found second positional arg.');
             const { width } = kwargs || {};
