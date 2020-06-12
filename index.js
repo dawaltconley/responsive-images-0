@@ -25,7 +25,7 @@ module.exports.plugin = {
             const imageSizes = data.images.sort((a, b) => a.w - b.w);
             let srcset = [];
             for (const img of imageSizes) {
-                if (width && width < img.w) {
+                if (width && width <= img.w) {
                     srcset.push(`${src} ${width}w`);
                     break;
                 }
