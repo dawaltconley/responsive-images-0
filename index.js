@@ -18,7 +18,10 @@ module.exports.plugin = {
         eleventyConfig.addNunjucksShortcode('srcset', (src, kwargs) => {
             if (kwargs && kwargs.__keywords !== true)
                 throw new Error('Srcset tag only takes an image and kwargs; found second positional arg.');
-            const { width } = kwargs || {};
+            let { width } = kwargs || {};
+            if (typeof width === 'string')
+                width = Number(width.replace(/\D+$/, ''));
+
             const imageSizes = data.images.sort((a, b) => a.w - b.w);
             let srcset = [];
             for (const img of imageSizes) {
