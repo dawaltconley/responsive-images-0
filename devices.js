@@ -138,5 +138,3 @@ module.exports = {
     images: images,
     queries: queries
 };
-
-console.log(queries);
