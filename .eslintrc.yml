@@ -9,4 +9,5 @@ globals:
   SharedArrayBuffer: readonly
 parserOptions:
   ecmaVersion: 11
-rules: {}
+rules:
+  no-unused-vars: warn
