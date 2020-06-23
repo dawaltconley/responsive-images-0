@@ -1,4 +1,9 @@
-const { plugin } = require('./index.js');
+const Images = require('./index.js');
+
+const { plugin } = new Images({
+    inputDir: './eleventy',
+    outputDir: './eleventy/_site'
+});
 
 module.exports = eleventyConfig => {
     eleventyConfig.addPlugin(plugin); 
