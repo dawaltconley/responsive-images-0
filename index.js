@@ -19,16 +19,15 @@ class Data {
     constructor(path) {
         this.path = path;
         this.data = fs.promises.readFile(path)
-            .then(async data => yaml.safeLoad(data.toString()))
+            .then(data => yaml.safeLoad(data.toString()))
             .catch(err => {
-                console.error('ERROR');
                 if (err.code === 'ENOENT')
                     return null;
                 else
                     throw err;
             });
-        this.stream = this.data.then(async () => {
-            await fs.promises.unlink(path);
+        this.stream = this.data.then(async data => {
+            if (data !== null) await fs.promises.unlink(path);
             return fs.createWriteStream(path);
         })
     }
