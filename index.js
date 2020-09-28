@@ -43,22 +43,40 @@ class Data {
     }
 }
 
-class Images {
-    constructor (opts={}) {
+class BuildEnv {
+    constructor(opts={}) {
         let {
             inputDir = '.',
-            outputDir = path.join('.', '_site'),
+            outputDir = path.join('.', '_site')
+        } = opts;
+        this.inputDir = inputDir;
+        this.outputDir = outputDir;
+
+        this.input = this.input.bind(this);
+        this.output = this.output.bind(this);
+    }
+
+    input(p) {
+        return path.join(this.inputDir, ...p.split('/'));
+    }
+
+    output(p) {
+        return path.join(this.outputDir, ...p.split('/'));
+    }
+}
+
+class Images extends BuildEnv {
+    constructor (opts={}) {
+        super(opts);
+        let {
             dataFile = path.join(__dirname, 'img-data.yml'),
             devices, images, queries
         } = opts;
-        this.input = inputDir;
-        this.output = outputDir;
         this.devices = devices || config.devices;
         this.images = images || config.images;
         this.queries = queries || config.queries;
         this.imageSizes = new Data(dataFile);
         this.tasks = [];
-
     }
 
     suffix (src, w, h) {
@@ -89,7 +107,7 @@ class Images {
     async srcset(src, kwargs) {
         if (kwargs && kwargs.__keywords !== true)
             throw new Error('Srcset tag only takes an image and kwargs; found second positional arg.');
-        let file = path.join(this.input, src)
+        let file = this.input(src);
         let { width } = kwargs || await this.measureImage(file) || {};
 
         if (!width) {
