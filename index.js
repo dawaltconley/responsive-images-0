@@ -2,6 +2,7 @@ const argParse = require('liquid-args');
 const gm = require('gm');
 const fs = require('fs');
 const yaml = require('js-yaml');
+const os = require('os');
 const path = require('path');
 const p = (...args) => path.join(__dirname, ...args);
 
@@ -70,12 +71,13 @@ class Images extends BuildEnv {
         super(opts);
         let {
             dataFile = path.join(__dirname, 'img-data.yml'),
-            devices, images, queries
+            devices, images, queries, maxParallel
         } = opts;
         this.devices = devices || config.devices;
         this.images = images || config.images;
         this.queries = queries || config.queries;
         this.imageSizes = new Data(dataFile);
+        this.maxParallel = maxParallel || os.cpus().length;
         this.tasks = [];
     }
 
@@ -120,16 +122,48 @@ class Images extends BuildEnv {
         const imageSizes = this.images
             .filter(img => img.w < width)
             .sort((a, b) => a.w - b.w);
-        this.tasks.push({
-            src: src,
-            transforms: imageSizes.map(i => ({ width: i.w }))
+
+        const optimized = gm(file).noProfile();
+        const newTasks = imageSizes.map(i => {
+            let output = this.suffix(src, i.w);
+            output = this.output(output);
+            return () => new Promise((resolve, reject) =>
+                optimized.resize(i.w).write(output, (e, d) =>
+                    e ? reject(e) : resolve(d)));
         });
+        this.tasks = this.tasks.concat(newTasks);
+        if (!this.runningTasks)
+            await this.runTasks();
+
         const srcset = [
             ...imageSizes.map(i => `${imgSuffix(src, i.w)} ${i.w}w`),
             `${src} ${width}w`
         ]
         console.log(this.tasks);
         return srcset.join(', ');
+    }
+
+    async runTasks() { // runs async processes
+        this.runningTasks = true;
+        const results = [];
+        const executing = [];
+        console.log(this.tasks);
+        while (this.tasks.length) {
+            if (executing.length < this.maxParallel) {
+                let task = this.tasks.shift();
+                task = task().then(r => {
+                    const i = executing.indexOf(task);
+                    executing.splice(i, 1);
+                    return r;
+                })
+                executing.push(task);
+            } else {
+                const next = await Promise.race(executing);
+                results.push(next);
+            }
+        }
+        this.runningTasks = false;
+        return results;
     }
 
     get plugin () {
