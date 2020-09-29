@@ -8,7 +8,7 @@ const p = (...args) => path.join(__dirname, ...args);
 
 const config = require(p('devices.js'));
 
-const suffix = (filePath, suf) => {
+const fileSuffix = (filePath, suf) => {
     const { dir, name, ext } = path.parse(filePath);
     return path.join(dir, name + suf + ext);
 }
@@ -82,7 +82,7 @@ class Images extends BuildEnv {
     }
 
     suffix (src, w, h) {
-         return suffix(src, h ? `-${w}x${h}` : `-${w}w`)
+         return fileSuffix(src, h ? `-${w}x${h}` : `-${w}w`);
     }
 
     async measureImage(path) {
@@ -136,7 +136,7 @@ class Images extends BuildEnv {
             await this.runTasks();
 
         const srcset = [
-            ...imageSizes.map(i => `${imgSuffix(src, i.w)} ${i.w}w`),
+            ...imageSizes.map(i => `${this.suffix(src, i.w)} ${i.w}w`),
             `${src} ${width}w`
         ]
         console.log(this.tasks);
