@@ -14,8 +14,7 @@ const fileSuffix = (filePath, suf) => {
     return path.join(dir, name + suf + ext);
 }
 
-const imgSuffix = (src, w, h) =>
-     suffix(src, h ? `-${w}x${h}` : `-${w}w`);
+const imgSuffix = (src, w, h) => fileSuffix(src, h ? `-${w}x${h}` : `-${w}w`);
 
 class Data {
     constructor(path) {
@@ -53,17 +52,47 @@ class BuildEnv {
         } = opts;
         this.inputDir = inputDir;
         this.outputDir = outputDir;
+    }
+}
 
-        this.input = this.input.bind(this);
-        this.output = this.output.bind(this);
+class Image extends BuildEnv {
+    constructor(src, opts={}) {
+        super(opts);
+        this.src = src;
+        this.inPath = path.join(this.inputDir, ...src.split('/'));
+        this.outPath = path.join(this.outputDir, ...src.split('/'));
+
+        this.measure = this.measure.bind(this);
+        this.resizeTask = this.resizeTask.bind(this);
     }
 
-    input(p) {
-        return path.join(this.inputDir, ...p.split('/'));
+    async measure(cache) { // maybe put cache in constructor
+        let saved = await cache.data;
+        saved = saved && saved.find(d => d.path === this.inPath);
+        if (saved) {
+            await cache.write({ ...saved, path: this.inPath });
+            return saved;
+        }
+        return new Promise((resolve, reject) =>
+            gm(this.inPath).size((err, data) => {
+                if (err && err.code === 1) {
+                    resolve({}); // may want to just throw err here, catch outside
+                } else if (err) {
+                    reject(err);
+                } else {
+                    cache.write({ ...data, path: this.inPath })
+                        .then(() => resolve(data));
+                }
+            }));
     }
 
-    output(p) {
-        return path.join(this.outputDir, ...p.split('/'));
+    resizeTask(w, h) {
+        return () => new Promise((resolve, reject) =>
+            gm(this.inPath)
+            .noProfile()
+            .resize(w, h, '^')
+            .write(imgSuffix(this.outPath, w, h), (e, d) =>
+                e ? reject(e) : resolve(d)));
     }
 }
 
@@ -82,37 +111,11 @@ class Images extends BuildEnv {
         this.tasks = [];
     }
 
-    suffix (src, w, h) {
-         return fileSuffix(src, h ? `-${w}x${h}` : `-${w}w`);
-    }
-
-    async measureImage(path) {
-        let saved = await this.imageSizes.data;
-        saved = saved && saved.find(d => d.path === path);
-        if (saved) {
-            await this.imageSizes.write({ ...saved, path: path });
-            return saved;
-        }
-        return new Promise((resolve, reject) =>
-            gm(p(path)).size((err, data) => {
-                if (err) {
-                    if (err.code === 1)
-                        resolve({});
-                    else
-                        reject(err);
-                } else {
-                    this.imageSizes.write({ ...data, path: path })
-                        .then(() => resolve(data));
-                }
-            }));
-    }
-
     async srcset(src, kwargs) {
         if (kwargs && kwargs.__keywords !== true)
             throw new Error('Srcset tag only takes an image and kwargs; found second positional arg.');
-        let file = this.input(src);
-        let output = this.output(src);
-        let { width } = kwargs || await this.measureImage(file) || {};
+        const img = new Image(src, this);
+        let { width } = kwargs || await img.measure(this.imageSizes) || {};
 
         if (!width) {
             console.warn(`No image found for path: ${src}`);
@@ -125,23 +128,19 @@ class Images extends BuildEnv {
             .filter(img => img.w < width)
             .sort((a, b) => a.w - b.w);
 
-        const existingOutputs = await globby(fileSuffix(output, '*'));
-        const optimized = gm(file).noProfile();
+        const existingOutputs = await globby(fileSuffix(img.outPath, '*'));
         const newTasks = imageSizes.map(i => {
-            const outPath = this.suffix(output, i.w);
+            const outPath = imgSuffix(img.outPath, i.w);
             if (existingOutputs.includes(outPath))
                 return null;
-            return () => new Promise((resolve, reject) =>
-                optimized.resize(i.w).write(outPath, (e, d) =>
-                    e ? reject(e) : resolve(d)));
-        })
-        .filter(task => task);
+            return img.resizeTask(i.w);
+        }).filter(task => task);
         this.tasks = this.tasks.concat(newTasks);
         if (!this.runningTasks)
             await this.runTasks();
 
         const srcset = [
-            ...imageSizes.map(i => `${this.suffix(src, i.w)} ${i.w}w`),
+            ...imageSizes.map(i => `${imgSuffix(img.src, i.w)} ${i.w}w`),
             `${src} ${width}w`
         ]
         return srcset.join(', ');
