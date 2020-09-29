@@ -1,5 +1,6 @@
 const argParse = require('liquid-args');
 const gm = require('gm');
+const globby = require('globby');
 const fs = require('fs');
 const yaml = require('js-yaml');
 const os = require('os');
@@ -110,6 +111,7 @@ class Images extends BuildEnv {
         if (kwargs && kwargs.__keywords !== true)
             throw new Error('Srcset tag only takes an image and kwargs; found second positional arg.');
         let file = this.input(src);
+        let output = this.output(src);
         let { width } = kwargs || await this.measureImage(file) || {};
 
         if (!width) {
@@ -123,14 +125,17 @@ class Images extends BuildEnv {
             .filter(img => img.w < width)
             .sort((a, b) => a.w - b.w);
 
+        const existingOutputs = await globby(fileSuffix(output, '*'));
         const optimized = gm(file).noProfile();
         const newTasks = imageSizes.map(i => {
-            let output = this.suffix(src, i.w);
-            output = this.output(output);
+            const outPath = this.suffix(output, i.w);
+            if (existingOutputs.includes(outPath))
+                return null;
             return () => new Promise((resolve, reject) =>
-                optimized.resize(i.w).write(output, (e, d) =>
+                optimized.resize(i.w).write(outPath, (e, d) =>
                     e ? reject(e) : resolve(d)));
-        });
+        })
+        .filter(task => task);
         this.tasks = this.tasks.concat(newTasks);
         if (!this.runningTasks)
             await this.runTasks();
@@ -139,7 +144,6 @@ class Images extends BuildEnv {
             ...imageSizes.map(i => `${this.suffix(src, i.w)} ${i.w}w`),
             `${src} ${width}w`
         ]
-        console.log(this.tasks);
         return srcset.join(', ');
     }
 
@@ -147,7 +151,6 @@ class Images extends BuildEnv {
         this.runningTasks = true;
         const results = [];
         const executing = [];
-        console.log(this.tasks);
         while (this.tasks.length) {
             if (executing.length < this.maxParallel) {
                 let task = this.tasks.shift();
