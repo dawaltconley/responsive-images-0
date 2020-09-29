@@ -16,6 +16,7 @@ const fileSuffix = (filePath, suf) => {
 
 const imgSuffix = (src, w, h) => fileSuffix(src, h ? `-${w}x${h}` : `-${w}w`);
 
+// for cacheing image sizes in a file so they don't need to be re-read each time
 class Data {
     constructor(path) {
         this.path = path;
