@@ -143,7 +143,7 @@ class Images extends BuildEnv {
         const srcset = [
             ...imageSizes.map(i => `${imgSuffix(img.src, i.w)} ${i.w}w`),
             `${src} ${width}w`
-        ]
+        ];
         return srcset.join(', ');
     }
 
