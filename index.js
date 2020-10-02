@@ -159,6 +159,99 @@ class Images extends BuildEnv {
         return srcset.join(', ');
     }
 
+    async background(selector, src, kwargs) {
+        if (kwargs && kwargs.__keywords !== true)
+            throw new Error('Srcset tag only takes an image and kwargs; found second positional arg.');
+        const img = new Image(src, this);
+        let {
+            x = 'center',
+            y = 'center',
+            size = 'cover'
+        } = kwargs || {};
+        let { width, height } = kwargs || await img.measure(this.imageSizes) || {};
+        if (!width || !height) {
+            throw new Error(`No image found for path: ${src}`);
+            // console.warn(`No image found for path: ${src}`);
+            // return src; // should return something else
+        }
+        if (typeof width === 'string')
+            width = Number(width.replace(/\D+$/, ''));
+        if (typeof height === 'string')
+            height = Number(height.replace(/\D+$/, ''));
+
+        const mediaQueries = [`
+            ${selector} {
+                background-position: ${x} ${y};
+                background-size: ${size};
+            }
+        `];
+
+        for (const orientation in this.queries) {
+            const q = this.queries[orientation];
+            console.log(orientation);
+            console.log(q);
+
+            for (let i = 0; i < q.length; i++) {
+                const current = q[i];
+                const next = q[i+1];
+                let queries = {
+                    and: [ `(orientation: ${orientation})` ],
+                    or: []
+                };
+                if (i > 0) {
+                    queries.and = [
+                        ...queries.and,
+                        `(max-width: ${current.w}px)`,
+                        `(max-height: ${current.h}px)`
+                    ];
+                }
+                if (next) {
+                    let minQueries = [];
+                    if (next.w < current.w) // are there any problems caused by lacking this? any double loading? possible...needs testing...but these queries wouldn't do anything anyway
+                        minQueries.push(`(min-width: ${next.w + 1}px)`)
+                    if (next.h < current.h)
+                        minQueries.push(`(min-height: ${next.h + 1}px)`);
+                    queries.or.push(minQueries);
+                }
+                q[i].images.forEach((image, j, images) => {
+                    // queries.or does not get cleared each time this loops, so it's adding resolution ORs
+                    let orQueries = [ ...queries.or ];
+                    let webkit = [];
+                    let resolution = [];
+                    if (j > 0) {
+                        webkit.push(`(-webkit-max-device-pixel-ratio: ${image.dppx})`);
+                        resolution.push(`(max-resolution: ${image.dppx * 96}dpi)`);
+                    }
+                    if (j < images.length - 1) {
+                        const nImg = images[j + 1];
+                        webkit.push(`(-webkit-min-device-pixel-ratio: ${nImg.dppx + 0.01})`);
+                        resolution.push(`(min-resolution: ${nImg.dppx * 96 + 1}dpi)`);
+                    }
+                    if (webkit.length && resolution.length) {
+                        orQueries.push([
+                            webkit.join(' and '),
+                            resolution.join(' and ')
+                        ]);
+                    }
+
+                    const allQueries = permute(orQueries)
+                        .map(q => queries.and.concat(q).join(' and '))
+                        .join(', ');
+
+                    console.log('QUERY STRING');
+                    console.dir(allQueries);
+
+                    mediaQueries.push(`@media ${allQueries} {
+                        ${selector} {
+                            background-image: url(${imgSuffix(img.src, image.w, image.h)});
+                        }
+                    }`);
+                });
+            }
+        }
+        return mediaQueries.join('\n');
+    }
+
     async runTasks() { // runs async processes
         this.runningTasks = true;
         const results = [];
