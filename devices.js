@@ -102,6 +102,7 @@ const queries = {
 };
 
 devices.forEach(d => {
+    const resolutions = [];
     d.dppx.forEach(dppx => {
         const w = d.w * dppx, h = d.h * dppx;
         const image = images.sort((a, b) => b.w - a.w).find((img, i, array) => {
@@ -110,27 +111,31 @@ devices.forEach(d => {
                 || w <= next.w && h > next.h && h <= img.h
                 || w <= img.w && w > next.w;
         });
+        console.log(image);
         if (w > image.w)
             console.log(`warning: image width too small for query ${d.w}x${d.h}x${dppx}`);
         if (h > image.h)
             console.log(`warning: image height too small for query ${d.w}x${d.h}x${dppx}`);
-        queries.landscape.push({
-            w: d.w,
-            h: d.h,
+        resolutions.push({
             dppx: dppx,
-            image: image
-            // image: `${image.w}x${image.h}`
+            ...image
         });
-        if (d.flip) {
-            queries.portrait.push({
-                w: d.h,
-                h: d.w,
-                dppx: dppx,
-                image: { w: image.h, h: image.w }
-                // image: `${image.h}x${image.w}`
-            })
-        }
     });
+    queries.landscape.push({
+        w: d.w,
+        h: d.h,
+        images: resolutions
+    });
+    if (d.flip) {
+        queries.portrait.push({
+            w: d.h,
+            h: d.w,
+            images: resolutions.map(r => ({
+                ...r,
+                w: r.h, h: r.w
+            }))
+        });
+    }
 });
 
 module.exports = {
