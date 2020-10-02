@@ -1,8 +1,13 @@
 <html>
   <head>
     <title>Responsive Images Test Sheet</title>
+    <style>
+      {% background '.bg-test', '/images/DSC03270.jpg' %}
+    </style>
   </head>
   <body>
     {% srcset '/images/DSC03270.jpg' %}
+
+    <div class="bg-test" style="width: 400px; height: 300px;"></div>
   </body>
 </html>

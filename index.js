@@ -279,7 +279,8 @@ class Images extends BuildEnv {
         return {
             initArguments: {},
             configFunction: function (eleventyConfig) {
-                const srcset = _t.srcset.bind(_t)
+                const srcset = _t.srcset.bind(_t);
+                const background = _t.background.bind(_t);
                 eleventyConfig.addNunjucksAsyncShortcode('srcset', srcset);
                 eleventyConfig.addLiquidTag('srcset', function(liquidEngine) {
                     return {
@@ -293,6 +294,7 @@ class Images extends BuildEnv {
                         }
                     };
                 });
+                eleventyConfig.addNunjucksAsyncShortcode('background', background);
 
                 eleventyConfig.on('afterBuild', async () => {
                     (await _t.imageSizes.stream).end();
