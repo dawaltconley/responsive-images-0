@@ -16,6 +16,18 @@ const fileSuffix = (filePath, suf) => {
 
 const imgSuffix = (src, w, h) => fileSuffix(src, h ? `-${w}x${h}` : `-${w}w`);
 
+const permute = (matrix, permutations=[], a=[]) => {
+    if (a.length === matrix.length) // if is matrix length, consider it a complete permutation and add it to perms
+        return permutations.push([ ...a ]);
+
+    let row = matrix[a.length];
+
+    for (let item of row)
+        permute(matrix, permutations, [ ...a, item ]); //call function on each row
+
+    return permutations;
+};
+
 // for cacheing image sizes in a file so they don't need to be re-read each time
 class Data {
     constructor(path) {
