@@ -195,9 +195,11 @@ class Image extends BuildEnv {
         size = bgParse(size)[0]; // only supports one bg image for now
 
         let filterFunc = img => !width || img.w <= width && !height || img.h <= height; // can simplify this if I just force measurement on Image construction
-        if (size.keyword === 'cover') {
-            filterFunc = img => img.w <= width || img.h <= height || !width && !height; // can simplify this if I just force measurement on Image construction
-        }
+        // let filterFunc = img => img.w <= width && img.h <= height;
+        // if (size.keyword === 'cover') { // wait...would I ever want this? seems to inevitably result in upsizing, 
+        //     // filterFunc = img => img.w <= width || img.h <= height || !width && !height; // can simplify this if I just force measurement on Image construction
+        //     filterFunc = img => img.w <= width || img.h <= height;
+        // }
 
         let gravity = getGrav(x, y);
         let imageSizes = {};
@@ -209,13 +211,14 @@ class Image extends BuildEnv {
             imageSizes = []; // annoying
             if (flip) {
                 imageSizes = this.availableSizes
-                    .map(s => ({ w: s.h, h: s.w }))
-                    .concat(imageSizes);
+                    .map(s => ({ w: s.h, h: s.w }));
             }
             imageSizes = this.availableSizes
-                .filter(filterFunc)
-                .concat(imageSizes);
+                .concat(imageSizes)
+                .filter(filterFunc);
         }
+
+        console.log(imageSizes);
 
         const alreadyGenerated = await this.alreadyGenerated;
         const outputs = [];
@@ -227,8 +230,8 @@ class Image extends BuildEnv {
             else if (size.width && size.width.size === 'auto')
                 w = null;
 
+            outputs.push({ src: imgSuffix(this.src, w, h), w: w, h: h });
             const outPath = imgSuffix(this.outPath, w, h); // need some condition here to decide whether using width, height, or both
-            outputs.push({ src: outPath, w: w, h: h });
             if (alreadyGenerated.includes(outPath))
                 continue;
             newTasks.push(this.resizeTask(w, h, {
@@ -334,7 +337,7 @@ class Images extends BuildEnv {
 
         const srcset = [
             // ...imageSizes.map(i => `${imgSuffix(img.src, i.w)} ${i.w}w`),
-            newTasks.output.sort((a, b) => a.w - b.w).map(i => `${i.src} ${i.w}w`), // produces bad output when no tasks
+            ...newTasks.output.sort((a, b) => a.w - b.w).map(i => `${i.src} ${i.w}w`), // produces bad output when no tasks
             `${src} ${width}w`
         ];
         return srcset.join(', ');
@@ -408,9 +411,18 @@ class Images extends BuildEnv {
         `];
 
         for (const orientation in this.queries) {
-            const q = this.queries[orientation];
-            // console.log(orientation);
-            // console.log(q);
+            // const q = [];
+            // for (const query of this.queries[orientation]) {
+            //     let images = q.images.filter(i => newTasks.output.find(o => o.w === i.w && o.h === i.h));
+            //     if (images.length)
+            //         q.push({ ...q, images: images });
+            // }
+            const q = this.queries[orientation]
+                .map(q => {
+                    let images = q.images.filter(i => newTasks.output.find(o => o.w === i.w && o.h === i.h));
+                    return { ...q, images: images };
+                })
+                .filter(q => q.images.length);
 
             for (let i = 0; i < q.length; i++) {
                 const current = q[i];
