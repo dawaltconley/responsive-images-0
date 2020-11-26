@@ -185,74 +185,43 @@ class Image extends BuildEnv {
             x = 'center',
             y = 'center',
             size = 'cover', // only need this (and x/y) when resizing both dimensions
+            flip = false,
             width, height
         } = opts;
         if (this.width && !width || this.width < width)
             width = this.width;
         if (this.height && !height || this.height < height)
             height = this.height;
-        // width = width < this.width ? width : this.width;
         size = bgParse(size)[0]; // only supports one bg image for now
-        console.log('width');
-        console.log(width);
 
-        // let filterFunc = img => img.w <= width && img.h <= height;
-        let filterFunc = img => {
-            // console.log('size = '+size);
-            // console.log(`w=${img.w} h=${img.h}`);
-            // console.log(`width=${width} height=${height}`);
-            let b = !width || img.w <= width && !height || img.h <= height; // can simplify this if I just force measurement on Image construction
-            // console.log(b);
-            return b;
-        };
+        let filterFunc = img => !width || img.w <= width && !height || img.h <= height; // can simplify this if I just force measurement on Image construction
         if (size.keyword === 'cover') {
-            // filterFunc = img => img.w <= width || img.h <= height; // should be || for size: cover
-            filterFunc = img => {
-                // console.log('size = '+size);
-                // console.log(`w=${img.w} h=${img.h}`);
-                // console.log(`width=${width} height=${height}`);
-                let b = img.w <= width || img.h <= height || !width && !height; // can simplify this if I just force measurement on Image construction
-                // console.log(b);
-                return b;
-            };
+            filterFunc = img => img.w <= width || img.h <= height || !width && !height; // can simplify this if I just force measurement on Image construction
         }
-
-        console.log('width 2');
-        console.log(width);
 
         let gravity = getGrav(x, y);
-
         let imageSizes = {};
-
-        console.log('width 3');
-        console.log(width);
-
-        if ([ size.height, size.width ].filter(s => s && s.unit === 'px').length) { // unsure what the point of creating a new array here is...if it's already an array from bgParse
+        if ([ size.height, size.width ].filter(s => s && s.unit === 'px').length) {
             for (let d in size)
-                imageSizes[d[0]] = size[d].size; // huh? array[object].size? doesn't make sense if size is an array of objects
+                imageSizes[d[0]] = size[d].size;
             imageSizes = [ imageSizes ];
         } else {
-            console.log('this.availableSizes');
-            console.log(this.availableSizes);
-            console.log('width 4');
-            console.log(width);
+            imageSizes = []; // annoying
+            if (flip) {
+                imageSizes = this.availableSizes
+                    .map(s => ({ w: s.h, h: s.w }))
+                    .concat(imageSizes);
+            }
             imageSizes = this.availableSizes
                 .filter(filterFunc)
-                .sort((a, b) => a.w - b.w);
+                .concat(imageSizes);
         }
 
-        console.log('imageSizes');
-        console.log(imageSizes);
-
         const alreadyGenerated = await this.alreadyGenerated;
-        console.log('alreadyGenerated');
-        console.log(alreadyGenerated);
         const outputs = [];
         const newTasks = [];
 
         for (let { w, h } of imageSizes) {
-            console.log('looping imageSizes');
-            console.log({ w, h });
             if (size.height && size.height.size === 'auto')
                 h = null;
             else if (size.width && size.width.size === 'auto')
@@ -266,9 +235,6 @@ class Image extends BuildEnv {
                 gravity: gravity
             }));
         }
-
-        console.log('newTasks');
-        console.log(newTasks);
 
         // const newTasks = imageSizes.map(i => {
         //     let { w, h } = i;
@@ -368,7 +334,7 @@ class Images extends BuildEnv {
 
         const srcset = [
             // ...imageSizes.map(i => `${imgSuffix(img.src, i.w)} ${i.w}w`),
-            newTasks.output.map(i => `${i.src} ${i.w}w`), // produces bad output when no tasks
+            newTasks.output.sort((a, b) => a.w - b.w).map(i => `${i.src} ${i.w}w`), // produces bad output when no tasks
             `${src} ${width}w`
         ];
         return srcset.join(', ');
@@ -383,7 +349,8 @@ class Images extends BuildEnv {
         let {
             x = 'center',
             y = 'center',
-            size = 'cover'
+            size = 'cover',
+            flip = true
         } = kwargs || {};
         let { width, height } = kwargs || await img.measure() || {}; // I might not need to measure here? measure on image creation instead?
         if (!width || !height) {
@@ -400,11 +367,9 @@ class Images extends BuildEnv {
             x: 'center',
             y: 'center',
             size: 'cover',
+            flip: true,
             ...kwargs,
         });
-
-        console.log('background newTasks');
-        console.log(newTasks.tasks);
 
         await this.addTasks(newTasks.tasks); // add to afterBuild
 
@@ -470,7 +435,6 @@ class Images extends BuildEnv {
                     queries.or.push(minQueries);
                 }
                 q[i].images.forEach((image, j, images) => { // bad variable names
-                    // queries.or does not get cleared each time this loops, so it's adding resolution ORs
                     let orQueries = [ ...queries.or ];
                     let webkit = [];
                     let resolution = [];
