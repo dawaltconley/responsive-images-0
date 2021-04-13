@@ -156,14 +156,15 @@ class Image extends BuildEnv {
                 await fs.promises.access(outPath);
             } catch (e) {
                 if (e.code === 'ENOENT') {
+                    await fs.promises.mkdir(path.dirname(outPath), { recursive: true }); // not necessary if the tags assume the image exists in _site already at right path location...maybe should use that for resizing, as inPath, rather than original file
                     return new Promise((resolve, reject) => {
                         console.log('executing gm');
                         gm(this.inPath)
-                        .noProfile()
-                        .resize(w, h, '^')
-                        .gravity(gravity)
-                        .write(outPath, (e, d) =>
-                            e ? reject(e) : resolve(d))
+                            .noProfile()
+                            .resize(w, h, '^')
+                            .gravity(gravity)
+                            .write(outPath, (e, d) =>
+                                e ? reject(e) : resolve(d))
                     });
                 }
                 throw e
