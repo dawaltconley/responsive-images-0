@@ -564,7 +564,7 @@ class Images extends BuildEnv {
                 eleventyConfig.addNunjucksAsyncShortcode('background', background);
 
                 eleventyConfig.on('afterBuild', async () => {
-                    (await _t.imageSizes.stream).end();
+                    (await _t.cache.stream).end();
                 });
             }
         }
