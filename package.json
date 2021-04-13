@@ -4,7 +4,8 @@
   "description": "Tools for implementing responsive images via srcset, picture, and CSS media queries.",
   "main": "index.js",
   "scripts": {
-    "test": "npx eleventy"
+    "test": "npx eleventy",
+    "serve": "npx eleventy --serve"
   },
   "keywords": [
     "responsive",
