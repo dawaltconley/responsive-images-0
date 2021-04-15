@@ -443,6 +443,8 @@ class Images extends BuildEnv {
         `];
 
         for (const orientation in this.queries) {
+            if (!crop && orientation !== img.orientation)
+                continue;
             const q = this.queries[orientation];
             // console.log(orientation);
             // console.log(q);
@@ -451,9 +453,14 @@ class Images extends BuildEnv {
                 const current = q[i];
                 const next = q[i+1];
                 let queries = {
-                    and: [ `(orientation: ${orientation})` ],
+                    and: [],
                     or: []
                 };
+                if (crop)
+                    queries.and = [
+                        ...queries.and,
+                        `(orientation: ${orientation})`
+                    ];
                 if (i > 0) {
                     queries.and = [
                         ...queries.and,
