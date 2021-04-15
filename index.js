@@ -149,6 +149,7 @@ class Image extends BuildEnv {
     resizeTask(w, h, opts={}) {
         let {
             gravity = 'Center',
+            crop = false,
         } = opts;
         const outPath = imgSuffix(this.outPath, w, h);
         return async () => {
@@ -157,14 +158,16 @@ class Image extends BuildEnv {
             } catch (e) {
                 if (e.code === 'ENOENT') {
                     await fs.promises.mkdir(path.dirname(outPath), { recursive: true }); // not necessary if the tags assume the image exists in _site already at right path location...maybe should use that for resizing, as inPath, rather than original file
+                    let operations = gm(this.inPath)
+                        .noProfile()
+                        .gravity(gravity)
+                        .resize(w, h, '^') // add option for no-upscale, '>' or '<'
+                    if (crop)
+                        operations = operations.crop(w, h)
                     return new Promise((resolve, reject) => {
                         console.log('executing gm');
-                        gm(this.inPath)
-                            .noProfile()
-                            .resize(w, h, '^')
-                            .gravity(gravity)
-                            .write(outPath, (e, d) =>
-                                e ? reject(e) : resolve(d))
+                        operations.write(outPath, (e, d) =>
+                            e ? reject(e) : resolve(d))
                     });
                 }
                 throw e
@@ -186,6 +189,7 @@ class Image extends BuildEnv {
             x = 'center',
             y = 'center',
             size = 'cover', // only need this (and x/y) when resizing both dimensions
+            crop = false,
             width, height
         } = opts;
         if (this.width && !width || this.width < width)
@@ -194,8 +198,6 @@ class Image extends BuildEnv {
             height = this.height;
         // width = width < this.width ? width : this.width;
         size = bgParse(size)[0]; // only supports one bg image for now
-        console.log('width');
-        console.log(width);
 
         // let filterFunc = img => img.w <= width && img.h <= height;
         let filterFunc = img => {
@@ -218,15 +220,8 @@ class Image extends BuildEnv {
             };
         }
 
-        console.log('width 2');
-        console.log(width);
-
         let gravity = getGrav(x, y);
-
         let imageSizes = {};
-
-        console.log('width 3');
-        console.log(width);
 
         if ([ size.height, size.width ].filter(s => s && s.unit === 'px').length) { // unsure what the point of creating a new array here is...if it's already an array from bgParse
             for (let d in size)
@@ -235,9 +230,12 @@ class Image extends BuildEnv {
         } else {
             console.log('this.availableSizes');
             console.log(this.availableSizes);
-            console.log('width 4');
-            console.log(width);
-            imageSizes = this.availableSizes
+            imageSizes = this.availableSizes;
+            if (crop)
+                imageSizes = imageSizes
+                    .map(({w,h}) => ({ w:h, h:w }))
+                    .concat(imageSizes);
+            imageSizes = imageSizes
                 .filter(filterFunc)
                 .sort((a, b) => a.w - b.w);
         }
@@ -264,7 +262,8 @@ class Image extends BuildEnv {
             if (alreadyGenerated.includes(outPath))
                 continue;
             newTasks.push(this.resizeTask(w, h, {
-                gravity: gravity
+                gravity: gravity,
+                crop: crop
             }));
         }
 
@@ -312,14 +311,11 @@ class Images extends BuildEnv {
         this.knownImages = [];
     }
 
-    newImage(src) {
+    async newImage(src) {
         let img = this.knownImages.find(i => i.src === src);
         if (img) return img
         img = new Image(src, this);
-        // img = new Image(src, {
-        //     inputDir: this.inputDir,
-        //     outputDir: this.outputDir
-        // });
+        await img.measure();
         this.knownImages.push(img);
         return img;
     }
@@ -329,11 +325,9 @@ class Images extends BuildEnv {
         console.log({ src, kwargs });
         if (kwargs && kwargs.__keywords !== true)
             throw new Error('Srcset tag only takes an image and kwargs; found second positional arg.');
-        let img = this.newImage(src);
-        let { width } = kwargs || await img.measure() || {};
-
-        console.log('kwargs width')
-        console.log(width)
+        let img = await this.newImage(src);
+        // let { width } = kwargs || await img.measure() || {};
+        let width = (kwargs && kwargs.width) || img.width;
 
         if (!width) {
             console.warn(`No image found for path: ${src}`);
@@ -380,13 +374,17 @@ class Images extends BuildEnv {
         console.log({ selector, src, kwargs });
         if (kwargs && kwargs.__keywords !== true)
             throw new Error('Srcset tag only takes an image and kwargs; found second positional arg.');
-        const img = this.newImage(src);
+        const img = await this.newImage(src);
         let {
             x = 'center',
             y = 'center',
-            size = 'cover'
+            size = 'cover',
+            crop = false // when true, need to change sizing behavior...only show cropped image when it wouldn't cause the image to upscale
         } = kwargs || {};
-        let { width, height } = kwargs || await img.measure() || {}; // I might not need to measure here? measure on image creation instead?
+        // let { width, height } = kwargs || {};
+        // if (!width || !height)
+        //     ({ width, height } = img);
+        let { width, height } = img;
         if (!width || !height) {
             throw new Error(`No image found for path: ${src}`);
             // console.warn(`No image found for path: ${src}`);
@@ -401,6 +399,7 @@ class Images extends BuildEnv {
             x: 'center',
             y: 'center',
             size: 'cover',
+            crop: crop,
             ...kwargs,
         });
 
@@ -471,7 +470,6 @@ class Images extends BuildEnv {
                     queries.or.push(minQueries);
                 }
                 q[i].images.forEach((image, j, images) => { // bad variable names
-                    // queries.or does not get cleared each time this loops, so it's adding resolution ORs
                     let orQueries = [ ...queries.or ];
                     let webkit = [];
                     let resolution = [];
