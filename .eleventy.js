@@ -6,7 +6,7 @@ const { plugin } = new Images({
 });
 
 module.exports = eleventyConfig => {
-   // eleventyConfig.addPassthroughCopy('eleventy/images');
+    eleventyConfig.addPassthroughCopy('eleventy/images');
     eleventyConfig.addPlugin(plugin); 
 
     return {

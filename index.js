@@ -40,6 +40,8 @@ const permute = (matrix, permutations=[], a=[]) => {
     return permutations;
 };
 
+const getOrientation = (w, h) => w >= h ? 'landscape' : 'portrait';
+
 // const resize = {
 //     cover: '^',
 //     contain: ''
@@ -106,6 +108,7 @@ class Image extends BuildEnv {
         this.src = src;
         this.cache = opts.cache;
         this.availableSizes = opts.images;
+        this.queries = opts.queries;
         this.inPath = path.join(this.inputDir, ...src.split('/')); // pointless? would need to split using path.separator
         this.outPath = path.join(this.outputDir, ...src.split('/'));
         this.alreadyGenerated = globby(fileSuffix(this.outPath, '*'));
@@ -113,12 +116,24 @@ class Image extends BuildEnv {
         this.gmSize = this.gmSize.bind(this);
         this.measure = this.measure.bind(this);
         this.resizeTask = this.resizeTask.bind(this);
+
+        // this.measureTask = this.measure()
+        //     .then(({ width, height }) => {
+        //         this.width = width;
+        //         this.height = height;
+        //         for (let o in this.queries) {
+        //             this.queries[o] = this.queries.map(q => ({
+        //                 ...q,
+        //                 images: q.images.filter(i => i.)
+        //             }))
+        //         }
+        //     });
     }
 
     get orientation() {
         if (!this.width || !this.height)
             return undefined;
-        return this.width >= this.height ? 'landscape' : 'portrait';
+        return getOrientation(this.width, this.height);
     }
 
     gmSize() { // put outside class
@@ -163,7 +178,7 @@ class Image extends BuildEnv {
                         .gravity(gravity)
                         .resize(w, h, '^') // add option for no-upscale, '>' or '<'
                     if (crop)
-                        operations = operations.crop(w, h)
+                        operations = operations.crop(w, h) // ideally append something to path to indicate image was cropped...
                     return new Promise((resolve, reject) => {
                         console.log('executing gm');
                         operations.write(outPath, (e, d) =>
@@ -231,13 +246,18 @@ class Image extends BuildEnv {
             console.log('this.availableSizes');
             console.log(this.availableSizes);
             imageSizes = this.availableSizes;
+            let portraitSizes = imageSizes.map(({w,h}) => ({ w:h, h:w }))
             if (crop)
-                imageSizes = imageSizes
-                    .map(({w,h}) => ({ w:h, h:w }))
-                    .concat(imageSizes);
+                imageSizes = imageSizes.concat(portraitSizes);
+            else if (this.orientation === 'portrait')
+                imageSizes = portraitSizes
+            console.log('imageSizes');
+            console.log(imageSizes);
             imageSizes = imageSizes
                 .filter(filterFunc)
                 .sort((a, b) => a.w - b.w);
+            console.log('imageSizes');
+            console.log(imageSizes);
         }
 
         console.log('imageSizes');
@@ -285,6 +305,9 @@ class Image extends BuildEnv {
         //         gravity: gravity
         //     });
         // }).filter(task => task); // should also filter out any duplicates here: don't resize the same image twice
+
+        console.log('outputs')
+        console.log(outputs)
 
         return {
             tasks: newTasks,
@@ -442,16 +465,57 @@ class Images extends BuildEnv {
             }
         `];
 
-        for (const orientation in this.queries) {
-            if (!crop && orientation !== img.orientation)
+        let availableQueries = this.queries;
+        for (let o in availableQueries) {
+            let largestOfOrientation = newTasks.output
+                .filter(i => getOrientation(i.w, i.h) === o)
+                .reduce((largest, i) => {
+                    if (i.w > largest.w && i.h > largest.h || i.w > i.h && i.w > largest.w || i.h > i.w && i.h > largest.h) // largest is either a) larger in both dimensions, or b) larger in its longer dimension
+                        return i;
+                    else 
+                        return largest;
+                }, { w:0, h:0 });
+            if (largestOfOrientation.w === 0) {
+                delete availableQueries[o]
                 continue;
-            const q = this.queries[orientation];
+            }
+            availableQueries[o] = availableQueries[o]
+                .map(q => {
+                    let images = [];
+                    if (q.images.length > 1) { // could do this same operation on queries as a whole, targeting single-image queries to find largest
+                        for (let j = q.images.length - 1; j >= 0; j--) { // iterate backwards to go from smaller to larger dppx
+                            let i = q.images[j]
+                            if(newTasks.output.find(t => t.w === i.w && t.h === i.h)) {
+                                images.push(i);
+                            } else {
+                                images.push({ // should provide largest available resolution to devices of higher dppx
+                                    dppx: i.dppx,
+                                    w: largestOfOrientation.w,
+                                    h: largestOfOrientation.h
+                                });
+                                break;
+                            }
+                        }
+                    }
+                    images.sort((a, b) => b.dppx - a.dppx);
+                    return { ...q, images: images };
+                })
+                .filter(q => q.images.length > 0);
+        }
+
+        console.dir(availableQueries, { depth: null });
+
+        for (const orientation in availableQueries) {
+            // if (!crop && orientation !== img.orientation)
+            //     continue;
+            const q = availableQueries[orientation];
             // console.log(orientation);
             // console.log(q);
 
             for (let i = 0; i < q.length; i++) {
                 const current = q[i];
                 const next = q[i+1];
+                console.log(current);
                 let queries = {
                     and: [],
                     or: []
@@ -477,6 +541,7 @@ class Images extends BuildEnv {
                     queries.or.push(minQueries);
                 }
                 q[i].images.forEach((image, j, images) => { // bad variable names
+                    console.log(image);
                     let orQueries = [ ...queries.or ];
                     let webkit = [];
                     let resolution = [];

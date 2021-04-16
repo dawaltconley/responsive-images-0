@@ -39,7 +39,7 @@ const devices = [
         h: 600,
         dppx: [ 3, 2, 1 ],
         flip: true },
-    {
+    { // might remove this one, not doing anything in most outputs
         w: 800,
         h: 600,
         dppx: [ 1 ],
