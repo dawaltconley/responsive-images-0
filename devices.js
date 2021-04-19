@@ -103,6 +103,8 @@ const queries = {
 
 devices.forEach(d => {
     const resolutions = [];
+    if (d.dppx.indexOf(1) < 0)
+        d.dppx.push(1);
     d.dppx.forEach(dppx => {
         const w = d.w * dppx, h = d.h * dppx;
         const image = images.sort((a, b) => b.w - a.w).find((img, i, array) => {
