@@ -31,13 +31,15 @@ const imgSuffix = (src, w, h) => {
 }
 
 const permute = (matrix, permutations=[], a=[]) => {
-    if (a.length === matrix.length) // if is matrix length, consider it a complete permutation and add it to perms
-        return permutations.push([ ...a ]);
+    if (a.length === matrix.length) { // if is matrix length, consider it a complete permutation and add it to perms
+        permutations.push([ ...a ]);
+        return permutations;
+    }
 
     let row = matrix[a.length];
 
     for (let item of row)
-        permute(matrix, permutations, [ ...a, item ]); //call function on each row
+        permute(matrix, permutations, [ ...a, item ]); // call function on each row
 
     return permutations;
 };
