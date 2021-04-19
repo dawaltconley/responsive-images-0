@@ -19,8 +19,10 @@ const fileSuffix = (filePath, suf) => {
 
 const imgSuffix = (src, w, h) => {
     let suffix = `-${w}x${h}`;
-    if (!h && !w)
+    if (h === undefined && w === undefined)
         throw new Error('imgSuffix missing both width and height arguments; needs at least one.');
+    else if (!w && !h)
+        return src;
     else if (w && !h)
         suffix = `-${w}w`;
     else if (h && !w)
