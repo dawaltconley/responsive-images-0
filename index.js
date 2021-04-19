@@ -44,6 +44,8 @@ const permute = (matrix, permutations=[], a=[]) => {
     return permutations;
 };
 
+const getOrientation = (w, h) => w >= h ? 'landscape' : 'portrait';
+
 // const resize = {
 //     cover: '^',
 //     contain: ''
@@ -122,7 +124,7 @@ class Image extends BuildEnv {
     get orientation() {
         if (!this.width || !this.height)
             return undefined;
-        return this.width >= this.height ? 'landscape' : 'portrait';
+        return getOrientation(this.width, this.height);
     }
 
     gmSize() { // put outside class
