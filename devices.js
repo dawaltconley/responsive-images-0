@@ -40,11 +40,6 @@ const devices = [
         dppx: [ 3, 2, 1 ],
         flip: true },
     {
-        w: 800,
-        h: 600,
-        dppx: [ 1 ],
-        flip: false },
-    {
         w: 768,
         h: 432,
         dppx: [ 4, 3, 2.5 ],
