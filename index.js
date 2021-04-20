@@ -44,6 +44,14 @@ const permute = (matrix, permutations=[], a=[]) => {
     return permutations;
 };
 
+var uniqByProperty = (arr, prop) =>
+    arr.reduce((uniq, obj) => {
+        if (!uniq.find(uObj => uObj[prop] === obj[prop]))
+            return [ ...uniq, obj ];
+        else
+            return uniq;
+    }, []);
+
 const getOrientation = (w, h) => w >= h ? 'landscape' : 'portrait';
 
 // const resize = {
@@ -121,6 +129,8 @@ class Image extends BuildEnv {
         this.measure = this.measure.bind(this);
         this.resizeTask = this.resizeTask.bind(this);
 
+        // should start measure here, await where needed
+
         // this.measureTask = this.measure()
         //     .then(({ width, height }) => {
         //         this.width = width;
@@ -165,6 +175,38 @@ class Image extends BuildEnv {
         };
     }
 
+    // getQueries(opts={}) {
+    //     let queries = this.queries;
+    //     for (let o in queries) {
+    //         console.log({ o });
+    //         queries[o] = queries[o]
+    //             .filter(q => this.filterFunc(q, opts))
+    //             .map(q => {
+    //                 let images = [];
+    //                 for (let i = q.images.length - 1; i >= 0; i--) { // iterate backwards to go from smaller to larger dppx
+    //                     let image = q.images[i];
+    //                     if(this.filterFunc(image, opts)) {
+    //                         images.push(image);
+    //                     } else {
+    //                         images.push({ // should provide largest available resolution to devices of higher dppx
+    //                             ...image,
+    //                             w: null,
+    //                             h: null
+    //                         });
+    //                         break;
+    //                     }
+    //                 }
+    //                 images.sort((a, b) => b.dppx - a.dppx);
+    //                 return { ...q, images: images };
+    //             });
+    //         if (!queries[o].length)
+    //             delete queries[o];
+    //     }
+    //     // need to add original to the queries here...either to landscape or portrait but not both
+    //     // can update this.availableSizes based on filtered queries to include landscapes
+    //     return queries;
+    // }
+
     resizeTask(w, h, opts={}) {
         let {
             gravity = 'Center',
@@ -202,6 +244,30 @@ class Image extends BuildEnv {
         //         e ? reject(e) : resolve(d)));
     }
 
+    // filterFunc(img, opts={}) {
+    //     let {
+    //         size = 'cover',
+    //         width, height
+    //     } = opts;
+    //     if (this.width && !width || this.width < width)
+    //         width = this.width;
+    //     if (this.height && !height || this.height < height)
+    //         height = this.height;
+    //     size = bgParse(size)[0]; // only supports one bg image for now
+    //
+    //     if (size.keyword === 'contain')
+    //         return img.w <= width || img.h <= height; 
+    //     else if (size.keyword === 'cover')
+    //         return img.w <= width && img.h <= height;
+    //     else if (size.width.unit === '%' && size.height.size === 'auto') // something similar for vw / vh / vmin / vmax
+    //         return width * size.width.size / 100 >= img.w;
+    //     else if (size.height.unit === '%' && size.width.size === 'auto')
+    //         return height * size.height.size / 100 >= img.h;
+    //
+    //     console.warn(`Unable to properly filter images for ${img}`);
+    //     return false;
+    // }
+
     async getTasks(opts={}) {
         // possible size values: 'cover'|'contain'|length/percent(width|width&height) => if passed size=100%, then should function like srcset
         let {
@@ -215,66 +281,101 @@ class Image extends BuildEnv {
             width = this.width;
         if (this.height && !height || this.height < height)
             height = this.height;
-        // width = width < this.width ? width : this.width;
         size = bgParse(size)[0]; // only supports one bg image for now
 
-        // let filterFunc = img => img.w <= width && img.h <= height;
-        let filterFunc = img => {
-            // console.log('size = '+size);
-            // console.log(`w=${img.w} h=${img.h}`);
-            // console.log(`width=${width} height=${height}`);
-            let b = !width || img.w <= width && !height || img.h <= height; // can simplify this if I just force measurement on Image construction
-            // console.log(b);
-            return b;
-        };
-        if (size.keyword === 'cover') {
-            // filterFunc = img => img.w <= width || img.h <= height; // should be || for size: cover
-            filterFunc = img => {
-                // console.log('size = '+size);
-                // console.log(`w=${img.w} h=${img.h}`);
-                // console.log(`width=${width} height=${height}`);
-                let b = img.w <= width || img.h <= height || !width && !height; // can simplify this if I just force measurement on Image construction
-                // console.log(b);
-                return b;
-            };
-        }
-
         let gravity = getGrav(x, y);
-        let imageSizes = {};
+        let filterFunc = () => false;
+        let queries = this.queries;
+        let imageSizes = this.availableSizes
+            .sort((a, b) => a.w - b.w);
 
         if ([ size.height, size.width ].filter(s => s && s.unit === 'px').length) {
+            imageSizes = {};
+            queries = {};
             for (let d in size)
-                imageSizes[d[0]] = size[d].size; // d[0] takes the first letter of either 'width' or 'height' as the new object key
+                imageSizes[d[0]] = size[d].size || null; // d[0] takes the first letter of either 'width' or 'height' as the new object key
+
+            queries[this.orientation] = [{
+                w: imageSizes.w, // these may not be needed
+                h: imageSizes.h, // these may not be needed
+                images: [{ w: imageSizes.w, h: imageSizes.h, dppx: 1 }]
+            }];
             imageSizes = [ imageSizes ];
         } else {
-            imageSizes = this.availableSizes;
-            let portraitSizes = imageSizes.map(({w,h}) => ({ w:h, h:w }))
-            imageSizes = imageSizes.concat(portraitSizes);
-            imageSizes = imageSizes
-                .filter(filterFunc)
-                .sort((a, b) => a.w - b.w);
+            let widthOnly = size.width && size.width.unit === '%' && size.height && size.height.size === 'auto';
+            let heightOnly = size.height && size.height.unit === '%' && size.width && size.width.size === 'auto';
+            if (size.keyword === 'contain' || size.width && size.width.size === 'auto' && size.height && size.height.size === 'auto') {
+                filterFunc = img => img.w <= width || img.h <= height;
+            } else if (size.keyword === 'cover') {
+                filterFunc = img => img.w <= width && img.h <= height;
+            } else if (widthOnly) { // something similar for vw / vh / vmin / vmax
+                filterFunc = img => width * size.width.size / 100 >= img.w;
+                imageSizes = uniqByProperty(imageSizes, 'w')
+                    .map(i => ({ ...i, h: null }));
+            } else if (heightOnly) {
+                filterFunc = img => height * size.height.size / 100 >= img.h;
+                imageSizes = uniqByProperty(imageSizes, 'h')
+                    .map(i => ({ ...i, w: null }))
+                    .sort((a, b) => a.h - b.h);
+            }
+            imageSizes = imageSizes.filter(filterFunc);
+            let keepOriginal = width === this.width && height === this.height; // don't use original size img if user has specified a smaller size in the tag
+            for (let o in queries) {
+                queries[o] = queries[o]
+                    .filter(filterFunc)
+                    .map(q => {
+                        let images = [];
+                        for (let i = q.images.length - 1; i >= 0; i--) { // iterate backwards to go from smaller to larger dppx
+                            let image = q.images[i];
+                            if(filterFunc(image)) {
+                                if (widthOnly)
+                                    image = { ...image, h: null };
+                                if (heightOnly)
+                                    image = { ...image, w: null };
+                                images.push(image);
+                                continue;
+                            } else if (keepOriginal) {
+                                images.push({ // will provide largest available resolution to devices of higher dppx
+                                    ...image,
+                                    w: null,
+                                    h: null
+                                });
+                            }
+                            break;
+                        }
+                        images.sort((a, b) => b.dppx - a.dppx);
+                        if (widthOnly)
+                            return { ...q, h: null, images: images };
+                        if (heightOnly)
+                            return { ...q, w: null, images: images };
+                        return { ...q, images: images };
+                    });
+                if (!queries[o].length)
+                    delete queries[o];
+            }
+            if (keepOriginal)
+                queries[this.orientation].push({
+                    w: this.width,
+                    h: this.height,
+                    images: [{ w: null, h: null, dppx: 1 }]
+                })
         }
 
-        // console.log('imageSizes');
-        // console.log(imageSizes);
-
         const alreadyGenerated = await this.alreadyGenerated;
-        // console.log('alreadyGenerated');
-        // console.log(alreadyGenerated);
-        const outputs = [];
+        // const outputs = [];
         const newTasks = [];
 
         for (let { w, h } of imageSizes) {
             // console.log('looping imageSizes');
             // console.log({ w, h });
-            if (size.height && size.height.size === 'auto')
-                h = null;
-            else if (size.width && size.width.size === 'auto')
-                w = null;
+            // if (size.height && size.height.size === 'auto')
+            //     h = null;
+            // else if (size.width && size.width.size === 'auto')
+            //     w = null;
 
             const outPath = imgSuffix(this.outPath, w, h); // need some condition here to decide whether using width, height, or both
-            // outputs.push({ src: outPath, w: w, h: h });
-            outputs.push({ src: imgSuffix(this.src, w, h), w: w, h: h });
+            // // outputs.push({ src: outPath, w: w, h: h });
+            // outputs.push({ src: imgSuffix(this.src, w, h), w: w, h: h });
             if (alreadyGenerated.includes(outPath))
                 continue;
             newTasks.push(this.resizeTask(w, h, {
@@ -307,7 +408,9 @@ class Image extends BuildEnv {
 
         return {
             tasks: newTasks,
-            output: outputs
+            // output: outputs
+            output: imageSizes,
+            queries: queries
         }
 
         // return newTasks; // this was missing, whole function missing a return
@@ -373,7 +476,7 @@ class Images extends BuildEnv {
         //     if (existingOutputs.includes(outPath))
         //         return null;
         //     return img.resizeTask(i.w);
-        // }).filter(task => task); // should also filter out any duplicates here: don't resize the same image twice
+        // }).filter(task => task); // should also filter out any duplicates here: don't xesize the same image twice
         // this.tasks = this.tasks.concat(newTasks.tasks);
         // if (!this.runningTasks)
         //     await this.runTasks();
@@ -461,110 +564,73 @@ class Images extends BuildEnv {
             }
         `];
 
-        let availableQueries = this.queries;
-        // for (let o in availableQueries) {
-        //     // let largestOfOrientation = newTasks.output
-        //     //     .filter(i => getOrientation(i.w, i.h) === o)
-        //     //     .reduce((largest, i) => {
-        //     //         if (i.w > largest.w && i.h > largest.h || i.w > i.h && i.w > largest.w || i.h > i.w && i.h > largest.h) // largest is either a) larger in both dimensions, or b) larger in its longer dimension
-        //     //             return i;
-        //     //         else 
-        //     //             return largest;
-        //     //     }, { w:0, h:0 });
-        //     // if (largestOfOrientation.w === 0) {
-        //     //     delete availableQueries[o]
-        //     //     continue;
-        //     // }
-        //     availableQueries[o] = availableQueries[o]
-        //         .map(q => {
-        //             console.log('LOOPING QUERIES');
-        //             console.log(q);
-        //             let images = [];
-        //             if (q.images.length > 1) { // could do this same operation on queries as a whole, targeting single-image queries to find largest
-        //                 for (let j = q.images.length - 1; j >= 0; j--) { // iterate backwards to go from smaller to larger dppx
-        //                     let i = q.images[j];
-        //                     console.log(j);
-        //                     if(newTasks.output.find(t => t.w === i.w && t.h === i.h)) {
-        //                         images.push(i);
-        //                         // if (i.w === largestOfOrientation.w && i.h === largestOfOrientation.h) {
-        //                         //     console.log('BREAKING: already largest');
-        //                         //     console.log(i.src);
-        //                         //     break;
-        //                         // }
-        //                     } else {
-        //                         console.log('PUSHING LARGEST');
-        //                         images.push({ // should provide largest available resolution to devices of higher dppx
-        //                             ...i,
-        //                             w: null,
-        //                             h: null
-        //                             // w: largestOfOrientation.w,
-        //                             // h: largestOfOrientation.h
-        //                         });
-        //                         break;
-        //                     }
-        //                 }
-        //             }
-        //             images.sort((a, b) => b.dppx - a.dppx);
-        //             console.log('FILTERED IMAGE LIST');
-        //             console.log(images);
-        //             return { ...q, images: images };
-        //         })
-        //         .filter(q => q.images.length > 0);
-        //     if (!availableQueries[o].length)
-        //         delete availableQueries[o];
-        // }
-
+        let availableQueries = newTasks.queries;
         console.dir(availableQueries, { depth: null });
 
         for (const orientation in availableQueries) {
             // if (!crop && orientation !== img.orientation)
             //     continue;
-            const q = availableQueries[orientation];
             // console.log(orientation);
             // console.log(q);
+            const other = Object.keys(availableQueries).find(k => k !== orientation);
+            const maxOther = availableQueries[other].reduce((max, q) => {
+                if (q.w >= max.w && q.h >= max.h) {
+                    return { w: q.w, h: q.h };
+                } else if (q.w > max.w) {
+                    return { ...max, w: q.w };
+                } else if (q.h > max.h) {
+                    return { ...max, h: q.h };
+                } else {
+                    return max;
+                }
+            }, { w: 0, h: 0 })
 
+            const q = availableQueries[orientation];
             for (let i = 0; i < q.length; i++) {
                 const current = q[i];
                 const next = q[i+1];
-                let queries = {
-                    and: [ `(orientation: ${orientation})` ], // should only add 'landscape' orientation for queries with a min that infringes on some portrait orientation...can be achieved by moving the logic from the devices.js file into here
-                    or: []
-                };
                 // let queries = {
-                //     and: [],
+                //     and: [ `(orientation: ${orientation})` ], // should only add 'landscape' orientation for queries with a min that infringes on some portrait orientation...can be achieved by moving the logic from the devices.js file into here
                 //     or: []
                 // };
-                // if (crop)
-                //     queries.and = [
-                //         ...queries.and,
-                //         `(orientation: ${orientation})`
-                //     ];
+                let queries = {
+                    and: [],
+                    or: []
+                };
+                // in order to *drop* the orientation query, next.w > max.w AND next.h > max.h
+                console.dir({ next, maxOther }, { depth: null });
+                let addOrientation = (next && (next.w <= maxOther.w || next.h <= maxOther.h)) || current.w <= maxOther.w || current.h <= maxOther.h
+                // if (!next || next.w <= maxOther.h && next.h <= maxOther.w) {
+                //     console.log('adding orientation');
+                //     queries.and = [ `(orientation: ${orientation})` ];
+                // }
                 if (i > 0) {
-                    queries.and = [
-                        ...queries.and,
-                        `(max-width: ${current.w}px)`,
-                        `(max-height: ${current.h}px)`
-                    ];
+                    if (addOrientation)
+                        queries.and.push(`(orientation: ${orientation})`);
+                    if (current.w)
+                        queries.and.push(`(max-width: ${current.w}px)`);
+                    if (current.h)
+                        queries.and.push(`(max-height: ${current.h}px)`);
                 }
                 if (next) {
                     let minQueries = [];
-                    if (next.w < current.w) // are there any problems caused by lacking this? any double loading? possible...needs testing...but these queries wouldn't do anything anyway
+                    if (next.w && next.w < current.w) // are there any problems caused by lacking this? any double loading? possible...needs testing...but these queries wouldn't do anything anyway
                         minQueries.push(`(min-width: ${next.w + 1}px)`);
-                    if (next.h < current.h)
+                    if (next.h && next.h < current.h)
                         minQueries.push(`(min-height: ${next.h + 1}px)`);
                     queries.or.push(minQueries);
                 }
                 q[i].images.forEach((image, j, images) => { // bad variable names
                     // console.log(image);
+                    const nImg = images[j + 1];
                     let orQueries = [ ...queries.or ];
                     let webkit = [];
                     let resolution = [];
-                    if (j > 0) {
+                    if (j > 0 && image.dppx) {
                         webkit.push(`(-webkit-max-device-pixel-ratio: ${image.dppx})`);
                         resolution.push(`(max-resolution: ${image.dppx * 96}dpi)`);
                     }
-                    if (j < images.length - 1) {
-                        const nImg = images[j + 1];
+                    if (j < images.length - 1 && nImg.dppx) {
                         webkit.push(`(-webkit-min-device-pixel-ratio: ${nImg.dppx + 0.01})`);
                         resolution.push(`(min-resolution: ${nImg.dppx * 96 + 1}dpi)`);
                     }
@@ -575,8 +641,8 @@ class Images extends BuildEnv {
                         ]);
                     }
 
-                    console.log('orQueries');
-                    console.log(orQueries);
+                    // console.log('orQueries');
+                    // console.log(orQueries);
 
                     const allQueries = permute(orQueries)
                         .map(q => queries.and.concat(q).join(' and '))

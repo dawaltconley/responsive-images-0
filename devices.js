@@ -127,11 +127,21 @@ devices.forEach(d => {
         queries.portrait.push({
             w: d.h,
             h: d.w,
-            images: resolutions.map(r => ({
-                ...r,
-                w: r.h, h: r.w
-            }))
+            images: resolutions.map(r => {
+                let flipped = { w: r.h, h: r.w };
+                if(!images.find(i => i.w === flipped.w && i.h === flipped.h))
+                    images.push(flipped);
+                return {
+                    ...r,
+                    ...flipped
+                }
+            })
         });
+        // resolutions.forEach(r => {
+        //     if(!images.find(i => i.w === r.h && i.h === r.w))
+        //         images.push({ w: r.h, h: r.w });
+        // })
+        // could push the flipped sizes to images here
     }
 });
 
