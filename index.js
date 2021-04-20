@@ -242,9 +242,9 @@ class Image extends BuildEnv {
         let gravity = getGrav(x, y);
         let imageSizes = {};
 
-        if ([ size.height, size.width ].filter(s => s && s.unit === 'px').length) { // unsure what the point of creating a new array here is...if it's already an array from bgParse
+        if ([ size.height, size.width ].filter(s => s && s.unit === 'px').length) {
             for (let d in size)
-                imageSizes[d[0]] = size[d].size; // huh? array[object].size? doesn't make sense if size is an array of objects
+                imageSizes[d[0]] = size[d].size; // d[0] takes the first letter of either 'width' or 'height' as the new object key
             imageSizes = [ imageSizes ];
         } else {
             imageSizes = this.availableSizes;
