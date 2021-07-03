@@ -128,6 +128,7 @@ class Image extends BuildEnv {
         this.gmSize = this.gmSize.bind(this);
         this.measure = this.measure.bind(this);
         this.resizeTask = this.resizeTask.bind(this);
+        this.getTasks = this.getTasks.bind(this);
 
         // should start measure here, await where needed
 
@@ -158,7 +159,7 @@ class Image extends BuildEnv {
     }
 
     async measure() {
-        console.log('measuring...');
+        // console.log('measuring...');
         let { width, height } = this;
         if (!width || !height) {
             let saved = await this.cache.data; // supposed to be reading from cache
@@ -167,12 +168,9 @@ class Image extends BuildEnv {
             ({ width, height } = saved || await this.gmSize()); // catch err.code === 1 from gmSize, means no image found
         }
         await this.cache.write({ path: this.inPath, width: width, height: height });
-        Object.assign(this, { width: width, height: height });
-        console.log(`width=${this.width}, height=${this.height}`);
-        return {
-            width: width,
-            height: height
-        };
+        Object.assign(this, { width, height });
+        // console.log(`width=${this.width}, height=${this.height}`);
+        return { width, height };
     }
 
     // getQueries(opts={}) {
@@ -226,13 +224,14 @@ class Image extends BuildEnv {
                     if (crop)
                         operations = operations.crop(w, h) // ideally append something to path to indicate image was cropped...
                     return new Promise((resolve, reject) => {
-                        console.log('executing gm');
+                        // console.log('executing gm');
                         operations.write(outPath, (e, d) =>
                             e ? reject(e) : resolve(d))
                     });
                 }
                 throw e
             }
+            await Promise.resolve(this.alreadyGenerated);
             this.alreadyGenerated.push(outPath);
             return null
         }
@@ -285,11 +284,12 @@ class Image extends BuildEnv {
 
         let gravity = getGrav(x, y);
         let filterFunc = () => false;
-        let queries = this.queries;
-        let imageSizes = this.availableSizes
+        let queries = this.queries; // load all possible queries, based on supplied devices and possible images
+        let imageSizes = this.availableSizes // load possible image sizes, which will be sorted by widest to narrowest
             .sort((a, b) => a.w - b.w);
 
         if ([ size.height, size.width ].filter(s => s && s.unit === 'px').length) {
+            // produce single task if using absolute (non-responsive sizes) for the image
             imageSizes = {};
             queries = {};
             for (let d in size)
@@ -302,6 +302,7 @@ class Image extends BuildEnv {
             }];
             imageSizes = [ imageSizes ];
         } else {
+            // for responsive images, determine how to filter out unecessary queries
             let widthOnly = size.width && size.width.unit === '%' && size.height && size.height.size === 'auto';
             let heightOnly = size.height && size.height.unit === '%' && size.width && size.width.size === 'auto';
             if (size.keyword === 'contain' || size.width && size.width.size === 'auto' && size.height && size.height.size === 'auto') {
@@ -361,7 +362,7 @@ class Image extends BuildEnv {
                 })
         }
 
-        const alreadyGenerated = await this.alreadyGenerated;
+        const alreadyGenerated = await Promise.resolve(this.alreadyGenerated);
         // const outputs = [];
         const newTasks = [];
 
@@ -374,7 +375,7 @@ class Image extends BuildEnv {
             //     w = null;
 
             const outPath = imgSuffix(this.outPath, w, h); // need some condition here to decide whether using width, height, or both
-            // // outputs.push({ src: outPath, w: w, h: h });
+            // outputs.push({ src: outPath, w: w, h: h });
             // outputs.push({ src: imgSuffix(this.src, w, h), w: w, h: h });
             if (alreadyGenerated.includes(outPath))
                 continue;
@@ -408,12 +409,10 @@ class Image extends BuildEnv {
 
         return {
             tasks: newTasks,
-            // output: outputs
+            // output: outputs,
             output: imageSizes,
             queries: queries
         }
-
-        // return newTasks; // this was missing, whole function missing a return
     }
 }
 
@@ -443,8 +442,8 @@ class Images extends BuildEnv {
     }
 
     async srcset(src, kwargs) {
-        console.log('calling SRCSET');
-        console.log({ src, kwargs });
+        // console.log('calling SRCSET');
+        // console.log({ src, kwargs });
         if (kwargs && kwargs.__keywords !== true)
             throw new Error('Srcset tag only takes an image and kwargs; found second positional arg.');
         let img = await this.newImage(src);
@@ -463,8 +462,8 @@ class Images extends BuildEnv {
             size: '100%'
         });
 
-        console.log('srcset newTasks');
-        console.log(newTasks.tasks);
+        // console.log('srcset newTasks');
+        // console.log(newTasks.tasks);
 
         // const imageSizes = this.images // can do this internal to image class, if storing width / height internally
         //     .filter(img => img.w < width) // but can only keep it consistent / internal if using *image* width/height, not that provided by kwargs
@@ -492,8 +491,8 @@ class Images extends BuildEnv {
     }
 
     async background(selector, src, kwargs) {
-        console.log('calling BACKGROUND');
-        console.log({ selector, src, kwargs });
+        // console.log('calling BACKGROUND');
+        // console.log({ selector, src, kwargs });
         if (kwargs && kwargs.__keywords !== true)
             throw new Error('Srcset tag only takes an image and kwargs; found second positional arg.');
         const img = await this.newImage(src);
@@ -598,7 +597,7 @@ class Images extends BuildEnv {
                     or: []
                 };
                 // in order to *drop* the orientation query, next.w > max.w AND next.h > max.h
-                console.dir({ next, maxOther }, { depth: null });
+                // console.dir({ next, maxOther }, { depth: null });
                 let addOrientation = (next && (next.w <= maxOther.w || next.h <= maxOther.h)) || current.w <= maxOther.w || current.h <= maxOther.h
                 // if (!next || next.w <= maxOther.h && next.h <= maxOther.w) {
                 //     console.log('adding orientation');
@@ -620,6 +619,7 @@ class Images extends BuildEnv {
                         minQueries.push(`(min-height: ${next.h + 1}px)`);
                     queries.or.push(minQueries);
                 }
+                // add dppx queries
                 q[i].images.forEach((image, j, images) => { // bad variable names
                     // console.log(image);
                     const nImg = images[j + 1];
