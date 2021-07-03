@@ -547,6 +547,16 @@ class Images extends BuildEnv {
         // DOUBLE LOADING
         //
         // 1353x909 at 1 dpr triggers both rules (which load the same image)
+        // problem because of the 1366x1024 device, which is the only one taller than the one that comes before it
+        // could simply remove the device
+        // or devise some way of avoiding this edge case:
+        // 1) larger devices min queries become AND instead of OR?
+        // 2) the queries constructor doesn't allow this, and adjusts the height
+        // 3) the device's query is devided up into multiple, for exactly the cases where it's needed
+        //
+        // 1366x1024 =>
+        //      1280 < w <= 1366
+        //      900 < h <= 1024
         //
         // @media (orientation: landscape) and (max-width: 1366px) and (max-height: 1024px) and (min-width: 1281px) and (-webkit-max-device-pixel-ratio: 1),
         // (orientation: landscape) and (max-width: 1366px) and (max-height: 1024px) and (min-width: 1281px) and (max-resolution: 96dpi),

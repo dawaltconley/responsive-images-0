@@ -10,25 +10,25 @@ const devices = [
         dppx: [ 1 ],
         flip: false },
     {
-        w: 1680,
-        h: 1050,
-        dppx: [ 1 ],
-        flip: false },
+        w: 1680,        // 1440 < w <= 1680
+        h: 1050,        // 1024 < h <= 1050 OR is this 900 < h <= 1050 (allow overlap on height, since w never overlaps)
+        dppx: [ 1 ],    //
+        flip: false },  // screen size 1500x980
+    {                   //
+        w: 1440,        // 1366 < w <= 1440
+        h: 900,         //  800 < h <=  900
+        dppx: [ 2, 1 ], //
+        flip: false },  //
     {
-        w: 1440,
-        h: 900,
-        dppx: [ 2, 1 ],
-        flip: false },
+        w: 1366,        // should look *backwards* to form the following query 
+        h: 1024,        // 1280 < w <= 1366
+        dppx: [ 2, 1 ], //  900 < h <= 1024
+        flip: true },   //
     {
-        w: 1366,
-        h: 1024,
-        dppx: [ 2, 1 ],
-        flip: true },
-    {
-        w: 1280,
-        h: 800,
-        dppx: [ 2, 1.5, 1 ],
-        flip: true },
+        w: 1280,                // 1024 < w <= 1280
+        h: 800,                 //  768 < h <=  800
+        dppx: [ 2, 1.5, 1 ],    //
+        flip: true },           //
     {
         w: 1024,
         h: 768,
@@ -39,6 +39,9 @@ const devices = [
         h: 600,
         dppx: [ 3, 2, 1 ],
         flip: true },
+    // {
+    //     w: 2000,                // 1920 < w <= 2000
+    //     h: 500 },               //  432 < h <=  500
     {
         w: 768,
         h: 432,
