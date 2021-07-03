@@ -62,7 +62,7 @@ const devices = [
         flip: true }
 ];
 
-const images = [ // also make a version of each image in portrait with crop set to true
+const images = [
     { w: 3072, h: 1728 },
     { w: 2880, h: 1800 },
     { w: 2732, h: 2048 },
@@ -99,14 +99,14 @@ const queries = {
 devices.forEach(d => {
     const resolutions = [];
     if (d.dppx.indexOf(1) < 0)
-        d.dppx.push(1);
+        d.dppx.push(1); // always include a dppx value of one for queries, to avoid upscaling when screen resizes on larger 1dppx displays
     d.dppx.forEach(dppx => {
         const w = d.w * dppx, h = d.h * dppx;
         const image = images.sort((a, b) => b.w - a.w).find((img, i, array) => {
             const next = array[i + 1];
-            return !next
-                || w <= next.w && h > next.h && h <= img.h
-                || w <= img.w && w > next.w;
+            return !next                                        // true if last
+                || w <= next.w && h <= img.h && h > next.h      // or last image high enough for current query, despite next image being wide enough
+                || w <= img.w && w > next.w;                    // or last image wide enough for current query
         });
         console.log(image);
         if (w > image.w)
@@ -129,8 +129,8 @@ devices.forEach(d => {
             h: d.w,
             images: resolutions.map(r => {
                 let flipped = { w: r.h, h: r.w };
-                if(!images.find(i => i.w === flipped.w && i.h === flipped.h))
-                    images.push(flipped);
+                if(!images.sort((a, b) => b.h - a.h).find(i => i.w === flipped.w && i.h === flipped.h))
+                    images.push(flipped); // this is key...reassigning to images before returning
                 return {
                     ...r,
                     ...flipped
