@@ -363,7 +363,7 @@ class Image extends BuildEnv {
                     delete queries[o];
             }
             if (keepOriginal)
-                queries[this.orientation].push({
+                queries[this.orientation].unshift({
                     w: this.width,
                     h: this.height,
                     images: [{ w: null, h: null, dppx: 1 }]
