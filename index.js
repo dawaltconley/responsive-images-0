@@ -307,20 +307,27 @@ class Image extends BuildEnv {
             let heightOnly = size.height && size.height.unit === '%' && size.width && size.width.size === 'auto';
             if (size.keyword === 'contain' || size.width && size.width.size === 'auto' && size.height && size.height.size === 'auto') {
                 filterFunc = img => img.w <= width || img.h <= height;
+                // imageSizes = imageSizes.filter(img => img.w <= width && img.h <= height && !(img.w === width && img.h ===height));
             } else if (size.keyword === 'cover') {
                 filterFunc = img => img.w <= width && img.h <= height;
+                // imageSizes = imageSizes.filter(img => img.w <= width && img.h <= height && !(img.w === width && img.h ===height));
             } else if (widthOnly) { // something similar for vw / vh / vmin / vmax
                 filterFunc = img => width * size.width.size / 100 >= img.w;
                 imageSizes = uniqByProperty(imageSizes, 'w')
+                    // .filter(i => i.w < width)
                     .map(i => ({ ...i, h: null }));
             } else if (heightOnly) {
                 filterFunc = img => height * size.height.size / 100 >= img.h;
                 imageSizes = uniqByProperty(imageSizes, 'h')
+                    // .filter(i => i.h < height)
                     .map(i => ({ ...i, w: null }))
                     .sort((a, b) => a.h - b.h);
             }
+            // was filtering imageSizes using filterFunc, but I think I always want the same filter here; only use smaller imageSizes; never upscale
             imageSizes = imageSizes.filter(filterFunc);
+            // imageSizes = imageSizes.filter(img => img.w <= width && img.h <= height && !(img.w === width && img.h ===height));
             let keepOriginal = width === this.width && height === this.height; // don't use original size img if user has specified a smaller size in the tag
+            console.log({ src: this.src, widthOnly, heightOnly });
             for (let o in queries) {
                 queries[o] = queries[o]
                     .filter(filterFunc)
@@ -333,11 +340,12 @@ class Image extends BuildEnv {
                                     image = { ...image, h: null };
                                 if (heightOnly)
                                     image = { ...image, w: null };
-                                images.push(image);
+                                images.push({ ...image, src: imgSuffix(this.src, image.w, image.h) });
                                 continue;
                             } else if (keepOriginal) {
                                 images.push({ // will provide largest available resolution to devices of higher dppx
                                     ...image,
+                                    src: this.src,
                                     w: null,
                                     h: null
                                 });
@@ -484,7 +492,7 @@ class Images extends BuildEnv {
 
         const srcset = [
             // ...imageSizes.map(i => `${imgSuffix(img.src, i.w)} ${i.w}w`),
-            newTasks.output.map(i => `${i.src} ${i.w}w`), // produces bad output when no tasks
+            newTasks.output.map(i => `${imgSuffix(src, i.w)} ${i.w}w`), // produces bad output when no tasks
             `${src} ${width}w`
         ];
         return srcset.join(', ');
@@ -588,6 +596,9 @@ class Images extends BuildEnv {
             for (let i = 0; i < q.length; i++) {
                 const current = q[i];
                 const next = q[i+1];
+                if (src === '/images/IMG_0205.jpg') {
+                    console.dir(current, { depth: null });
+                }
                 // let queries = {
                 //     and: [ `(orientation: ${orientation})` ], // should only add 'landscape' orientation for queries with a min that infringes on some portrait orientation...can be achieved by moving the logic from the devices.js file into here
                 //     or: []
@@ -620,6 +631,7 @@ class Images extends BuildEnv {
                     queries.or.push(minQueries);
                 }
                 // add dppx queries
+                console.dir({ images: q[i].images }, { depth: null });
                 q[i].images.forEach((image, j, images) => { // bad variable names
                     // console.log(image);
                     const nImg = images[j + 1];
@@ -644,19 +656,24 @@ class Images extends BuildEnv {
                     // console.log('orQueries');
                     // console.log(orQueries);
 
+
                     const allQueries = permute(orQueries)
                         .map(q => queries.and.concat(q).join(' and '))
                         .join(', ');
 
-                    // console.log('QUERY STRING');
-                    // console.dir(allQueries);
+                    if (src === '/images/IMG_0205.jpg') {
+                        console.log('QUERY STRING');
+                        console.dir(allQueries);
+                    }
                     
-                    let backgroundImage = newTasks.output.find(i => i.w === image.w && i.h === image.h);
-                    backgroundImage = backgroundImage ? backgroundImage.src : src;
+                    // let bgImg = newTasks.output.find(i => i.w === image.w && i.h === image.h);
+                    // bgImg = bgImg ? imgSuffix(src, bgImg.w, bgImg.h) : src;
+                    let bgImg = image.src || src;
+                    // console.log({ bgImg });
 
                     mediaQueries.push(`@media ${allQueries} {
                         ${selector} {
-                            background-image: url(${backgroundImage});
+                            background-image: url(${bgImg});
                         }
                     }`);
                 });
