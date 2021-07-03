@@ -628,7 +628,8 @@ class Images extends BuildEnv {
                         minQueries.push(`(min-width: ${next.w + 1}px)`);
                     if (next.h && next.h < current.h)
                         minQueries.push(`(min-height: ${next.h + 1}px)`);
-                    queries.or.push(minQueries);
+                    if (minQueries.length)
+                        queries.or.push(minQueries);
                 }
                 // add dppx queries
                 console.dir({ images: q[i].images }, { depth: null });
