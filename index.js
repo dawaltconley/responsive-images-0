@@ -284,8 +284,8 @@ class Image extends BuildEnv {
 
         let gravity = getGrav(x, y);
         let filterFunc = () => false;
-        let queries = this.queries; // load all possible queries, based on supplied devices and possible images
-        let imageSizes = this.availableSizes // load possible image sizes, which will be sorted by widest to narrowest
+        let queries = { ...this.queries }; // load all possible queries, based on supplied devices and possible images
+        let imageSizes = [ ...this.availableSizes ] // load possible image sizes, which will be sorted by widest to narrowest
             .sort((a, b) => a.w - b.w);
 
         if ([ size.height, size.width ].filter(s => s && s.unit === 'px').length) {
