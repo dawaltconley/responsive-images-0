@@ -327,7 +327,8 @@ class Image extends BuildEnv {
             imageSizes = imageSizes.filter(filterFunc);
             // imageSizes = imageSizes.filter(img => img.w <= width && img.h <= height && !(img.w === width && img.h ===height));
             let keepOriginal = width === this.width && height === this.height; // don't use original size img if user has specified a smaller size in the tag
-            console.log({ src: this.src, widthOnly, heightOnly });
+            // if (this.src === '/images/IMG_0205.jpg')
+            //     console.dir({ src: this.src, widthOnly, heightOnly, queries }, { depth: null });
             for (let o in queries) {
                 queries[o] = queries[o]
                     .filter(filterFunc)
@@ -359,15 +360,22 @@ class Image extends BuildEnv {
                             return { ...q, w: null, images: images };
                         return { ...q, images: images };
                     });
-                if (!queries[o].length)
+                if (keepOriginal) 
+                    queries[o].unshift({
+                        w: null, h: null,
+                        // w: this.width,
+                        // h: this.height,
+                        images: [{ w: null, h: null, dppx: 1, src: this.src }]
+                    });
+                else if (!queries[o].length)
                     delete queries[o];
             }
-            if (keepOriginal)
-                queries[this.orientation].unshift({
-                    w: this.width,
-                    h: this.height,
-                    images: [{ w: null, h: null, dppx: 1 }]
-                })
+            // if (keepOriginal)
+            //     queries[this.orientation].unshift({
+            //         w: this.width,
+            //         h: this.height,
+            //         images: [{ w: null, h: null, dppx: 1 }]
+            //     });
         }
 
         const alreadyGenerated = await Promise.resolve(this.alreadyGenerated);
@@ -582,7 +590,7 @@ class Images extends BuildEnv {
         `];
 
         let availableQueries = newTasks.queries;
-        console.dir(availableQueries, { depth: null });
+        // console.dir(availableQueries, { depth: null });
 
         for (const orientation in availableQueries) {
             // if (!crop && orientation !== img.orientation)
@@ -590,7 +598,9 @@ class Images extends BuildEnv {
             // console.log(orientation);
             // console.log(q);
             const other = Object.keys(availableQueries).find(k => k !== orientation);
+            console.log(availableQueries[other]);
             const maxOther = availableQueries[other].reduce((max, q) => {
+                console.log({ max });
                 if (q.w >= max.w && q.h >= max.h) {
                     return { w: q.w, h: q.h };
                 } else if (q.w > max.w) {
@@ -602,13 +612,12 @@ class Images extends BuildEnv {
                 }
             }, { w: 0, h: 0 })
 
+            console.log({ src, other, maxOther });
+
             const q = availableQueries[orientation];
             for (let i = 0; i < q.length; i++) {
                 const current = q[i];
                 const next = q[i+1];
-                if (src === '/images/IMG_0205.jpg') {
-                    console.dir(current, { depth: null });
-                }
                 // let queries = {
                 //     and: [ `(orientation: ${orientation})` ], // should only add 'landscape' orientation for queries with a min that infringes on some portrait orientation...can be achieved by moving the logic from the devices.js file into here
                 //     or: []
@@ -619,14 +628,12 @@ class Images extends BuildEnv {
                 };
                 // in order to *drop* the orientation query, next.w > max.w AND next.h > max.h
                 // console.dir({ next, maxOther }, { depth: null });
-                let addOrientation = (next && (next.w <= maxOther.w || next.h <= maxOther.h)) || current.w <= maxOther.w || current.h <= maxOther.h
-                // if (!next || next.w <= maxOther.h && next.h <= maxOther.w) {
-                //     console.log('adding orientation');
-                //     queries.and = [ `(orientation: ${orientation})` ];
-                // }
+                let addOrientation = (next && (next.w <= maxOther.w || next.h <= maxOther.h)) // can cause doubling with other original image...not sure if there's a good way to do this
+                    || current.w && current.w <= maxOther.w
+                    || current.h && current.h <= maxOther.h;
+                if (addOrientation)
+                    queries.and.push(`(orientation: ${orientation})`);
                 if (i > 0) {
-                    if (addOrientation)
-                        queries.and.push(`(orientation: ${orientation})`);
                     if (current.w)
                         queries.and.push(`(max-width: ${current.w}px)`);
                     if (current.h)
@@ -662,23 +669,11 @@ class Images extends BuildEnv {
                         ]);
                     }
 
-                    // console.log('orQueries');
-                    // console.log(orQueries);
-
-
                     const allQueries = permute(orQueries)
                         .map(q => queries.and.concat(q).join(' and '))
-                        .join(', ');
+                        .join(', \n');
 
-                    if (src === '/images/IMG_0205.jpg') {
-                        console.log('QUERY STRING');
-                        console.dir(allQueries);
-                    }
-                    
-                    // let bgImg = newTasks.output.find(i => i.w === image.w && i.h === image.h);
-                    // bgImg = bgImg ? imgSuffix(src, bgImg.w, bgImg.h) : src;
                     let bgImg = image.src || src;
-                    // console.log({ bgImg });
 
                     mediaQueries.push(`@media ${allQueries} {
                         ${selector} {
