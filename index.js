@@ -634,17 +634,15 @@ class Images extends BuildEnv {
                 }
                 if (next) {
                     let minQueries = [];
-                    if (next.w && next.w < current.w) // are there any problems caused by lacking this? any double loading? possible...needs testing...but these queries wouldn't do anything anyway
+                    if (next.w && next.w < current.w || !current.w) // are there any problems caused by lacking this? any double loading? possible...needs testing...but these queries wouldn't do anything anyway
                         minQueries.push(`(min-width: ${next.w + 1}px)`);
-                    if (next.h && next.h < current.h)
+                    if (next.h && next.h < current.h || !current.h)
                         minQueries.push(`(min-height: ${next.h + 1}px)`);
                     if (minQueries.length)
                         queries.or.push(minQueries);
                 }
                 // add dppx queries
-                console.dir({ images: q[i].images }, { depth: null });
                 q[i].images.forEach((image, j, images) => { // bad variable names
-                    // console.log(image);
                     const nImg = images[j + 1];
                     let orQueries = [ ...queries.or ];
                     let webkit = [];
